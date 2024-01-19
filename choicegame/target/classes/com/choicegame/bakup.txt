@@ -32,7 +32,7 @@ public class App {
 
     public static void main(String[] args) throws IOException {
         try (VertexAI vertexAi = new VertexAI("searchapi-378717", "us-central1");
-             MongoClient mongoClient = MongoClients.create(MONGO_URI)) {
+                MongoClient mongoClient = MongoClients.create(MONGO_URI)) {
 
             // Access the MongoDB database
             MongoDatabase database = mongoClient.getDatabase(DATABASE_NAME);
@@ -67,7 +67,22 @@ public class App {
                         if (isLoginSuccessful(userCollection, username, password)) {
                             // Login successful
                             isLoggedIn = true;
-                        } else {
+                        }
+                        // if login is successful give option to user to create new caht session or load
+                        // old chat sessions
+                        System.out.println("1. Create new chat session");
+                        System.out.println("2. Load chat session");
+                        System.out.print("Enter your choice: ");
+                        choice = Integer.parseInt(scanner.nextLine());
+                        if (choice == 1) {
+                            // Create new chat session
+                            chatHistory.clear();
+                        } else if (choice == 2) {
+                            // Load chat session
+                            loadChatSession(collection, username, password);
+                        }
+
+                        else {
                             // Login failed
                             System.out.println("Invalid credentials. Please try again.");
                         }
@@ -84,13 +99,14 @@ public class App {
                             System.out.println("Username already exists. Please try another one.");
                         }
                     }
-                } else {
+                } else if (isLoggedIn) {
                     // Logged in user interaction
                     System.out.println("You: ");
                     String userMessage = scanner.nextLine();
-                    //Give the first prompt predefined
+                    // Give the first prompt predefined
                     if (chatHistory.size() == 0) {
-                        chatHistory.add("Lets play a choice based game. You give me some genres to select from and then I will select one and then you will give a small sorry outline and then give 3 choices. I will select from one of those choices and then you will continue the story after that just like the game Dungeons and Dragons.");
+                        chatHistory.add(
+                                "Lets play a choice based game. You give me some genres to select from and then I will select one and then you will give a small sorry outline and then give 3 choices. I will select from one of those choices and then you will continue the story after that just like the game Dungeons and Dragons.");
                     }
 
                     if (userMessage.equalsIgnoreCase("exit")) {
@@ -114,6 +130,8 @@ public class App {
 
                     ResponseStream<GenerateContentResponse> responseStream = model.generateContentStream(contents);
 
+                    String username = ""; // Declare the username variable
+                    String password = ""; // Declare the password variable
                     StringBuilder response = new StringBuilder();
                     // Concatenate all parts into a single StringBuilder
                     responseStream.forEach(generateContentResponse -> generateContentResponse.getCandidatesList()
@@ -127,13 +145,15 @@ public class App {
                     chatHistory.add(response.toString());
 
                     // Save the chat session to MongoDB
-                    saveChatSession(collection, chatHistory);
+                    saveChatSession(collection, chatHistory, username, password);
                 }
             }
         }
+
     }
 
-    private static boolean isLoginSuccessful(MongoCollection<Document> userCollection, String username, String password) {
+    private static boolean isLoginSuccessful(MongoCollection<Document> userCollection, String username,
+            String password) {
         Document user = userCollection.find(new Document("username", username)).first();
         if (user != null) {
             String storedPassword = user.getString("password");
@@ -151,14 +171,50 @@ public class App {
         return false;
     }
 
-    private static void saveChatSession(MongoCollection<Document> collection, List<String> chatHistory) {
+    private static void saveChatSession(MongoCollection<Document> collection, List<String> chatHistory, String username,
+            String password) {
         // Create a document to represent the chat session
         Document chatSession = new Document();
-        chatSession.append("username", "your_username"); // Replace with the actual username
-        chatSession.append("password", "your_password"); // Replace with the actual password
-        chatSession.append("chats", chatHistory);
 
-        // Insert the document into the MongoDB collection
-        collection.insertOne(chatSession);
+        // If user in the chat types SAVE! then save the whole chat session history
+        if (chatHistory.get(chatHistory.size() - 1).equalsIgnoreCase("SAVE!")) {
+            // Remove the SAVE! message from the chat history
+            chatHistory.remove(chatHistory.size() - 1);
+
+            // Add the chat history to the chat session
+            chatSession.append("username", username); // Use the actual username
+            chatSession.append("password", password); // Use the actual password
+            chatSession.append("chats", chatHistory);
+
+            // Insert the document into the MongoDB collection
+            collection.insertOne(chatSession);
+            System.out.println("SAVED!");
+        }
+    }
+
+    // Let user access between the chat sessions he has created and continue from
+    // there
+    private static void loadChatSession(MongoCollection<Document> collection, String username, String password) {
+        // Create a document to represent the search criteria
+        Document searchCriteria = new Document();
+        searchCriteria.append("username", username);
+        searchCriteria.append("password", password);
+
+        // Find the chat session for the given username and password
+        Document chatSession = collection.find(searchCriteria).first();
+
+        // Check if a chat session was found
+        if (chatSession == null) {
+            System.out.println("No chat sessions found for the given username and password.");
+            return;
+        }
+
+        // Get the chat history from the chat session
+        List<String> chatHistory = (List<String>) chatSession.get("chats");
+
+        // Display the chat history
+        for (String message : chatHistory) {
+            System.out.println(message);
+        }
     }
 }

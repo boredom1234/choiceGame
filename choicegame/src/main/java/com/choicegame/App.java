@@ -7,17 +7,35 @@ import com.google.cloud.vertexai.api.GenerationConfig;
 import com.google.cloud.vertexai.api.Part;
 import com.google.cloud.vertexai.generativeai.preview.GenerativeModel;
 import com.google.cloud.vertexai.generativeai.preview.ResponseStream;
-import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.MongoCollection;
 import org.bson.Document;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.io.FileReader;
+
+//import swing
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.JLabel;
+import javax.swing.JButton;
+import javax.swing.JTextField;
+import javax.swing.JPasswordField;
+import javax.swing.JOptionPane;
+import javax.swing.JTextArea;
+import javax.swing.JScrollPane;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.text.DefaultCaret;
+import javax.swing.BoxLayout;
+import javax.swing.Box;
+import javax.swing.BorderFactory;
 
 public class App {
     private static Scanner scanner = new Scanner(System.in);
@@ -31,9 +49,18 @@ public class App {
     // user collection
     private static final String USER_COLLECTION_NAME = "user";
 
+    // Swing components
+    private static JTextArea textArea;
+    private static JTextField textField;
+    private static GenerativeModel model;
+
     public static void main(String[] args) throws IOException {
         String username = ""; // Declare the username variable
         String password = ""; // Declare the password variable
+        // SwingUtilities.invokeLater(() -> createUI(new StringBuilder()));
+        App app = new App();
+        Login login = new Login(app);
+        login.setVisible(true);
 
         try (VertexAI vertexAi = new VertexAI("searchapi-378717", "us-central1");
                 MongoClient mongoClient = MongoClients.create(MONGO_URI)) {
@@ -47,10 +74,10 @@ public class App {
 
             GenerationConfig generationConfig = GenerationConfig.newBuilder()
                     .setMaxOutputTokens(8192)
-                    .setTemperature(0.3F)
+                    .setTemperature(0.9F)
                     .setTopP(1)
                     .build();
-            GenerativeModel model = new GenerativeModel("gemini-pro", generationConfig, vertexAi);
+            model = new GenerativeModel("gemini-pro", generationConfig, vertexAi);
 
             // Main interaction loop
             while (true) {
@@ -72,22 +99,6 @@ public class App {
                             // Login successful
                             isLoggedIn = true;
                         }
-                        // // if login is successful give option to user to create new caht session or load
-                        // // old chat sessions
-                        // System.out.println("1. Create new chat session");
-                        // System.out.println("2. Load chat session");
-                        // System.out.print("Enter your choice: ");
-                        // choice = Integer.parseInt(scanner.nextLine());
-                        // if (choice == 1) {
-                        //     // Create new chat session
-                        //     chatHistory.clear();
-                        // } else if (choice == 2) {
-                        //     // Load chat session
-                        //     loadChatSessionById(collection, username, password);
-                        // } else {
-                        //     // Invalid choice
-                        //     System.out.println("Invalid choice. Please enter 1 or 2.");
-                        // }
                     } else if (choice == 2) {
                         // Handle signup
                         System.out.print("Enter username: ");
@@ -108,10 +119,17 @@ public class App {
                     // Logged in user interaction
                     System.out.println("You: ");
                     String userMessage = scanner.nextLine();
-                    // Give the first prompt predefined
+
                     if (chatHistory.size() == 0) {
-                        chatHistory.add(
-                                "let's play a text-based interactive storytelling game! You can choose from the following genres: Fantasy, Mystery, Thriller, Romance, Historical Fiction, Literary Fiction, Non-Fiction, Horror, Contemporary Fiction. Once you pick a genre, I'll provide a brief outline, and then you can make choices that will shape the story. I'll present three options at key points, and you can decide the direction of the narrative. Ready to begin? If so, please choose a genre from the list.");
+                        // Add to chat history from the file Prompt.txt
+                        BufferedReader reader = new BufferedReader(new FileReader(
+                                "C:\\Users\\banik\\OneDrive\\Documents\\CHRIST UNIVERSITY\\Second_Tri_Semester\\JAVA_Programming\\choiceGame\\choicegame\\src\\main\\java\\com\\choicegame\\Prompt.txt"));
+                        String line = reader.readLine();
+                        while (line != null) {
+                            chatHistory.add(line);
+                            line = reader.readLine();
+                        }
+                        reader.close();
                     }
 
                     if (userMessage.equalsIgnoreCase("exit")) {
@@ -146,45 +164,11 @@ public class App {
 
                     // Add the bot's response to the chat history
                     chatHistory.add(response.toString());
-
-                    // Save the chat session to MongoDB
-                    // saveChatSession(collection, chatHistory, username, password);
-
-                    // Save the chat session to MongoDB with a unique ID
-                    // String chatId = saveChatSession(collection, chatHistory, username, password);
-
-                    // Display the unique ID to the user
-                    // System.out.println("Chat saved with ID: " + chatId);
                 }
             }
         }
 
     }
-
-    // private static void displayChatSessions(MongoCollection<Document> collection, String username, String password) {
-    //     // Create a document to represent the search criteria
-    //     Document searchCriteria = new Document();
-    //     searchCriteria.append("username", username);
-    //     searchCriteria.append("password", password);
-
-    //     // Find all chat sessions for the given username and password
-    //     FindIterable<Document> chatSessions = collection.find(searchCriteria);
-
-    //     // Check if chat sessions were found
-    //     if (chatSessions == null || !chatSessions.iterator().hasNext()) {
-    //         System.out.println("No chat sessions found for the given username and password.");
-    //         return;
-    //     }
-
-    //     // Display available chat sessions with their unique IDs
-    //     System.out.println("Available Chat Sessions:");
-    //     int index = 1;
-    //     for (Document chatSession : chatSessions) {
-    //         String chatId = chatSession.getObjectId("_id").toString();
-    //         System.out.println(index + ". ID: " + chatId);
-    //         index++;
-    //     }
-    // }
 
     private static boolean isLoginSuccessful(MongoCollection<Document> userCollection, String username,
             String password) {
@@ -205,116 +189,114 @@ public class App {
         return false;
     }
 
-    // private static String saveChatSession(MongoCollection<Document> collection, List<String> chatHistory,
-    //         String username, String password) {
-    //     // Create a document to represent the chat session
-    //     Document chatSession = new Document();
-    //     chatSession.append("username", username); // Use the actual username
-    //     chatSession.append("password", password); // Use the actual password
-    //     chatSession.append("chats", chatHistory);
+    // Create UI
 
-    //     // Insert the document into the MongoDB collection
-    //     collection.insertOne(chatSession);
+    private static void createUI(StringBuilder response) {
+        // Create frame
+        JFrame frame = new JFrame("Choice Game");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(500, 500);
 
-    //     // Return the unique ID generated by MongoDB
-    //     return chatSession.getObjectId("_id").toString();
-    // }
+        // Create panel
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
 
-    // private static void loadChatSessions(MongoCollection<Document> collection,
-    // String username, String password) {
-    // // Create a document to represent the search criteria
-    // Document searchCriteria = new Document();
-    // searchCriteria.append("username", username);
-    // searchCriteria.append("password", password);
+        // Create label
+        JLabel label = new JLabel("Choice Game");
+        label.setAlignmentX(JLabel.CENTER_ALIGNMENT);
+        panel.add(label);
 
-    // // Find all chat sessions for the given username and password
-    // FindIterable<Document> chatSessions = collection.find(searchCriteria);
+        // Create text area
+        textArea = new JTextArea(10, 40);
+        textArea.setEditable(false);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
 
-    // // Check if chat sessions were found
-    // if (chatSessions == null || !chatSessions.iterator().hasNext()) {
-    // System.out.println("No chat sessions found for the given username and
-    // password.");
-    // return;
-    // }
+        // Auto-scrolling for the text area
+        DefaultCaret caret = (DefaultCaret) textArea.getCaret();
+        caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
 
-    // // Display available chat sessions with their unique IDs
-    // System.out.println("Available Chat Sessions:");
-    // for (Document chatSession : chatSessions) {
-    // String chatId = chatSession.getObjectId("_id").toString();
-    // System.out.println("ID: " + chatId);
-    // }
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setAlignmentX(JScrollPane.CENTER_ALIGNMENT);
+        panel.add(scrollPane);
 
-    // // Prompt the user to select a chat session by its ID
-    // System.out.print("Enter the ID of the chat session you want to load: ");
-    // String selectedChatId = scanner.nextLine();
+        // Create text field
+        textField = new JTextField(40);
+        textField.setAlignmentX(JTextField.CENTER_ALIGNMENT);
+        panel.add(textField);
 
-    // // Load the selected chat session by its ID
-    // loadChatSessionById(collection, selectedChatId);
-    // }
+        // Create button
+        JButton button = new JButton("Send");
+        button.setAlignmentX(JButton.CENTER_ALIGNMENT);
+        panel.add(button);
 
-    // private static void loadChatSessionById(MongoCollection<Document> collection, String username, String password) {
-    //     // Display available chat sessions with IDs
-    //     displayChatSessions(collection, username, password);
+        // Create action listener
+        button.addActionListener(e -> {
+            try {
+                handleSendMessage(response);
+            } catch (IOException e1) {
+                // TODO Auto-generated catch block
+                e1.printStackTrace();
+            }
+        });
 
-    //     // Prompt the user to select a chat session by its ID
-    //     String selectedChatId;
-    //     while (true) {
-    //         System.out.print("Enter the ID of the chat session you want to load: ");
-    //         selectedChatId = scanner.nextLine(); // Read user input as a string
+        // Add panel to frame
+        frame.getContentPane().add(panel);
+        frame.setVisible(true);
+    }
 
-    //         try {
-    //             // Attempt to validate if chatId is a valid ObjectId
-    //             new org.bson.types.ObjectId(selectedChatId);
-    //             break; // Break out of the loop if validation succeeds
-    //         } catch (IllegalArgumentException e) {
-    //             System.out.println("Invalid ObjectId format. Please enter a valid ObjectId.");
-    //         }
-    //     }
+    private static void updateTextArea(String message) {
+        textArea.append(message + "\n");
+    }
 
-    //     // Create a document to represent the search criteria using the unique ID
-    //     Document searchCriteria = new Document("_id", new org.bson.types.ObjectId(selectedChatId));
+    private static void handleSendMessage(StringBuilder response) throws IOException {
+        String userMessage = textField.getText();
+        if (userMessage.equalsIgnoreCase("exit")) {
+            System.exit(0);
+        }
+        chatHistory.add(userMessage);
+        updateTextArea("You: " + userMessage);
 
-    //     // Find the chat session for the given unique ID
-    //     Document chatSession = collection.find(searchCriteria).first();
+        // Generate a response using the entire chat history as context
+        List<Content> contents = new ArrayList<>();
 
-    //     // Check if a chat session was found
-    //     if (chatSession == null) {
-    //         System.out.println("No chat sessions found for the given ID.");
-    //         return;
-    //     }
+        // Alternating turns between user and model
+        for (int i = 0; i < chatHistory.size(); i++) {
+            String message = chatHistory.get(i);
+            String role = (i % 2 == 0) ? "user" : "model"; // Alternate roles
+            contents.add(
+                    Content.newBuilder().setRole(role).addParts(Part.newBuilder().setText(message))
+                            .build());
+        }
 
-    //     // Get the chat history from the chat session
-    //     List<String> loadedChatHistory = chatSession.getList("chats", String.class);
+        ResponseStream<GenerateContentResponse> responseStream = model.generateContentStream(contents);
 
-    //     // Display the loaded chat history
-    //     System.out.println("Loaded Chat History:");
-    //     for (String message : loadedChatHistory) {
-    //         System.out.println(message);
-    //     }
-    // }
+        StringBuilder botResponse = new StringBuilder();
+        // Concatenate all parts into a single StringBuilder
+        responseStream.forEach(generateContentResponse -> generateContentResponse.getCandidatesList()
+                .forEach(candidate -> candidate.getContent().getPartsList()
+                        .forEach(part -> botResponse.append(part.getText()))));
 
-    // Clear all chat
-    // private static void clearChatSession(MongoCollection<Document> collection, String username, String password) {
-    //     // Create a document to represent the search criteria
-    //     Document searchCriteria = new Document();
-    //     searchCriteria.append("username", username);
-    //     searchCriteria.append("password", password);
+        // Display the bot's response in the UI
+        updateTextArea("Vertex: " + botResponse + "\n");
 
-    //     // Find the chat session for the given username and password
-    //     Document chatSession = collection.find(searchCriteria).first();
+        // Add the bot's response to the chat history
+        chatHistory.add(botResponse.toString());
 
-    //     // Check if a chat session was found
-    //     if (chatSession == null) {
-    //         System.out.println("No chat sessions found for the given username and password.");
-    //         return;
-    //     }
+        // Clear text field
+        textField.setText("");
 
-    //     // Get the chat history from the chat session
-    //     List<String> chatHistory = (List<String>) chatSession.get("chats");
+        updateUI(response);
+    }
 
-    //     // Display the chat history
-    //     for (String message : chatHistory) {
-    //         System.out.println(message);
-    //     }
-    // }
+    private static void updateUI(StringBuilder response) {
+        SwingUtilities.invokeLater(() -> {
+            // updateTextArea("Bot: " + response);
+        });
+    }
+
+    public void launchAppGUI() {
+        // Create and show the App GUI
+        createUI(new StringBuilder());
+    }
 }
